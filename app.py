@@ -76,6 +76,11 @@ app = Celery(
     # (https://github.com/repository-service-tuf/vmware/issues/6)
 )
 
+app.conf.update(
+    task_time_limit=worker_settings.get("TASK_TIME_LIMIT", 3600),
+    task_soft_time_limit=worker_settings.get("TASK_SOFT_TIME_LIMIT", 3000),
+)
+
 
 @app.task(serializer="json", bind=True)
 def repository_service_tuf_worker(
