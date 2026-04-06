@@ -8,6 +8,7 @@ from typing import Any, List, Optional
 
 import awswrangler
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from securesystemslib.exceptions import StorageError  # noqa
 from tuf.api.metadata import Metadata, T, Timestamp
@@ -53,12 +54,17 @@ class AWSS3(IStorage):
             aws_secret_access_key=secret_access_key,
             region_name=region,
         )
+        boto_config = None
+        if endpoint:
+            boto_config = Config(s3={'addressing_style': 'path'})
+
         s3_resource = s3_session.resource(
             "s3",
             aws_access_key_id=access_key,
             aws_secret_access_key=secret_access_key,
             region_name=region,
             endpoint_url=endpoint,
+            config=boto_config,
         )
         buckets = [bucket.name for bucket in s3_resource.buckets.all()]
         bucket_name = settings.AWS_STORAGE_BUCKET
@@ -71,6 +77,7 @@ class AWSS3(IStorage):
             aws_secret_access_key=secret_access_key,
             region_name=region,
             endpoint_url=endpoint,
+            config=boto_config,
         )
 
         return cls(
@@ -119,6 +126,7 @@ class AWSS3(IStorage):
         """
         if self._endpoint_url is not None:
             awswrangler.config.s3_endpoint_url = self._endpoint_url
+            awswrangler.config.botocore_config = Config(s3={'addressing_style': 'path'})
 
         if role == Timestamp.type:
             filename = f"{role}.json"
@@ -148,7 +156,7 @@ class AWSS3(IStorage):
             file_object = s3_object.get("Body")
             return Metadata.from_bytes(file_object.read())
         except (DeserializationError, ClientError) as e:
-            if "NoSuchKey" in str(e):
+            if "NoSuchKey" in str(e) or "404" in str(e) or "Not Found" in str(e):
                 raise StorageError(f"Role '{role}' not found") from e
             raise StorageError(f"Can't open Role '{role}'") from e
         finally:
